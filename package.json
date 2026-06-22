@@ -48,7 +48,9 @@
     "dist"
   ],
   "scripts": {
+    "build:vendor": "esbuild node_modules/highlight.js/lib/common.js --bundle --format=iife --global-name=hljs --outfile=dist/vendor/hljs.js && cp node_modules/highlight.js/styles/github.min.css dist/vendor/hljs.css && cp node_modules/marked/lib/marked.umd.js dist/vendor/marked.js",
     "build": "tsup",
+    "postbuild": "npm run build:vendor",
     "dev": "tsup --watch",
     "serve": "node dist/cli.js",
     "test": "vitest run",
@@ -60,12 +62,15 @@
   "dependencies": {
     "chokidar": "^4.0.3",
     "gray-matter": "^4.0.3",
-    "js-yaml": "^5.0.0"
+    "highlight.js": "^11.11.1",
+    "js-yaml": "^5.0.0",
+    "marked": "^18.0.5"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.0.0",
+    "puppeteer": "^25.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"

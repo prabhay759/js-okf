@@ -1,12 +1,41 @@
 import http from 'node:http'
 import path from 'node:path'
-import { readdir } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { readdir, readFile } from 'node:fs/promises'
+import { existsSync, realpathSync } from 'node:fs'
 import { URL } from 'node:url'
 import { watch } from 'chokidar'
 import { readConcept } from './concept.js'
 import { normalizeId } from './utils.js'
 import type { ServeOptions, OKFConcept } from './types.js'
+
+function resolveVendor(vendorFile: string, pkgFallback: { pkg: string; file: string }): string {
+  const candidates: string[] = []
+  // 1. Pre-bundled vendor in dist/vendor/ (always present in the npm package)
+  try {
+    const scriptDir = path.dirname(realpathSync(process.argv[1] ?? ''))
+    candidates.push(path.join(scriptDir, 'vendor', vendorFile))
+  } catch { /* ignore */ }
+  // 2. node_modules relative to the script (npx / local install)
+  try {
+    const scriptDir = path.dirname(realpathSync(process.argv[1] ?? ''))
+    candidates.push(path.join(scriptDir, '..', 'node_modules', pkgFallback.pkg, pkgFallback.file))
+  } catch { /* ignore */ }
+  // 3. node_modules in cwd
+  candidates.push(path.join(process.cwd(), 'node_modules', pkgFallback.pkg, pkgFallback.file))
+  for (const c of candidates) {
+    if (existsSync(c)) return c
+  }
+  return ''
+}
+
+async function readVendor(filePath: string): Promise<string> {
+  if (!filePath || !existsSync(filePath)) return ''
+  return readFile(filePath, 'utf8')
+}
+
+const MARKED_PATH = resolveVendor('marked.js', { pkg: 'marked', file: 'lib/marked.umd.js' })
+const HLJS_PATH = resolveVendor('hljs.js', { pkg: 'highlight.js', file: 'lib/common.js' })
+const HLJS_CSS_PATH = resolveVendor('hljs.css', { pkg: 'highlight.js', file: 'styles/github.min.css' })
 
 const HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -14,9 +43,9 @@ const HTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>js-okf viewer</title>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="/vendor/marked.js"></script>
+<link rel="stylesheet" href="/vendor/hljs.css">
+<script src="/vendor/hljs.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -242,6 +271,27 @@ export function createServer(
     if (pathname === '/') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       res.end(HTML)
+      return
+    }
+
+    if (pathname === '/vendor/marked.js') {
+      const content = await readVendor(MARKED_PATH)
+      res.writeHead(200, { 'Content-Type': 'application/javascript' })
+      res.end(content)
+      return
+    }
+
+    if (pathname === '/vendor/hljs.js') {
+      const content = await readVendor(HLJS_PATH)
+      res.writeHead(200, { 'Content-Type': 'application/javascript' })
+      res.end(content)
+      return
+    }
+
+    if (pathname === '/vendor/hljs.css') {
+      const content = await readVendor(HLJS_CSS_PATH)
+      res.writeHead(200, { 'Content-Type': 'text/css' })
+      res.end(content)
       return
     }
 

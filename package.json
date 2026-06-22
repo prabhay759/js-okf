@@ -1,6 +1,6 @@
 {
   "name": "js-okf",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript library for creating and updating Open Knowledge Format (OKF) bundles — markdown-based knowledge files for AI coding agents",
   "keywords": [
     "okf",
@@ -41,12 +41,16 @@
       }
     }
   },
+  "bin": {
+    "okf": "./dist/cli.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "serve": "node dist/cli.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -54,6 +58,7 @@
     "prepublishOnly": "npm run build && npm run typecheck && npm run test"
   },
   "dependencies": {
+    "chokidar": "^4.0.3",
     "gray-matter": "^4.0.3",
     "js-yaml": "^5.0.0"
   },

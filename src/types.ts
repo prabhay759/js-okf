@@ -42,3 +42,9 @@ export interface LogEntry {
   action?: 'created' | 'updated' | 'deleted'
   timestamp?: string
 }
+
+export interface ServeOptions {
+  port?: number
+  host?: string
+  open?: boolean
+}

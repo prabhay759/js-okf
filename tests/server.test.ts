@@ -8,7 +8,7 @@ let port: number
 
 beforeEach(() => {
   dir = tmpBundleDir()
-  port = 3100 + Math.floor(Math.random() * 900)
+  port = 7100 + Math.floor(Math.random() * 900)
 })
 
 afterEach(() => {

@@ -1,6 +1,6 @@
 {
   "name": "js-okf",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript library for creating and updating Open Knowledge Format (OKF) bundles — markdown-based knowledge files for AI coding agents",
   "keywords": [
     "okf",
@@ -48,7 +48,7 @@
     "dist"
   ],
   "scripts": {
-    "build:vendor": "esbuild node_modules/highlight.js/lib/common.js --bundle --format=iife --global-name=hljs --outfile=dist/vendor/hljs.js && cp node_modules/highlight.js/styles/github.min.css dist/vendor/hljs.css && cp node_modules/marked/lib/marked.umd.js dist/vendor/marked.js",
+    "build:vendor": "esbuild node_modules/highlight.js/lib/common.js --bundle --format=iife --global-name=hljs --outfile=dist/vendor/hljs.js && cp node_modules/highlight.js/styles/github.min.css dist/vendor/hljs.css && cp node_modules/marked/lib/marked.umd.js dist/vendor/marked.js && esbuild scripts/vendor-d3.mjs --bundle --format=iife --global-name=d3 --minify --outfile=dist/vendor/d3.js",
     "build": "tsup",
     "postbuild": "npm run build:vendor",
     "dev": "tsup --watch",
@@ -70,6 +70,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.0.0",
+    "d3": "^7.9.0",
     "puppeteer": "^25.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",

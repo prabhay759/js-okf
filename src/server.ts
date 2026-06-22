@@ -10,17 +10,14 @@ import type { ServeOptions, OKFConcept } from './types.js'
 
 function resolveVendor(vendorFile: string, pkgFallback: { pkg: string; file: string }): string {
   const candidates: string[] = []
-  // 1. Pre-bundled vendor in dist/vendor/ (always present in the npm package)
   try {
     const scriptDir = path.dirname(realpathSync(process.argv[1] ?? ''))
     candidates.push(path.join(scriptDir, 'vendor', vendorFile))
   } catch { /* ignore */ }
-  // 2. node_modules relative to the script (npx / local install)
   try {
     const scriptDir = path.dirname(realpathSync(process.argv[1] ?? ''))
     candidates.push(path.join(scriptDir, '..', 'node_modules', pkgFallback.pkg, pkgFallback.file))
   } catch { /* ignore */ }
-  // 3. node_modules in cwd
   candidates.push(path.join(process.cwd(), 'node_modules', pkgFallback.pkg, pkgFallback.file))
   for (const c of candidates) {
     if (existsSync(c)) return c
@@ -34,8 +31,9 @@ async function readVendor(filePath: string): Promise<string> {
 }
 
 const MARKED_PATH = resolveVendor('marked.js', { pkg: 'marked', file: 'lib/marked.umd.js' })
-const HLJS_PATH = resolveVendor('hljs.js', { pkg: 'highlight.js', file: 'lib/common.js' })
+const HLJS_PATH = resolveVendor('hljs.js', { pkg: 'highlight.js', file: 'lib/core.js' })
 const HLJS_CSS_PATH = resolveVendor('hljs.css', { pkg: 'highlight.js', file: 'styles/github.min.css' })
+const D3_PATH = resolveVendor('d3.js', { pkg: 'd3', file: 'dist/d3.min.js' })
 
 const HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -43,169 +41,398 @@ const HTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>js-okf viewer</title>
+<script src="/vendor/d3.js"></script>
 <script src="/vendor/marked.js"></script>
 <link rel="stylesheet" href="/vendor/hljs.css">
 <script src="/vendor/hljs.js"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #ffffff; --bg2: #f6f8fa; --border: #d0d7de; --text: #1f2328;
-    --text2: #57606a; --link: #0969da; --link-hover: #0550ae;
-    --active-bg: #ddf4ff; --active-text: #0550ae;
-    --header-bg: #24292f; --header-text: #f0f6fc;
-    --live: #2da44e; --sidebar-w: 260px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d1117; --bg2: #161b22; --border: #30363d; --text: #e6edf3;
-      --text2: #8b949e; --link: #58a6ff; --link-hover: #79c0ff;
-      --active-bg: #1c2a3a; --active-text: #58a6ff;
-      --header-bg: #161b22; --header-text: #e6edf3;
-      --live: #3fb950;
-    }
-  }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: var(--text); background: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-  header { background: var(--header-bg); color: var(--header-text); padding: 0 16px; height: 48px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
-  header h1 { font-size: 14px; font-weight: 600; font-family: monospace; }
-  header .sep { color: #8b949e; }
-  header .bundle-path { font-family: monospace; font-size: 13px; color: #8b949e; }
-  header .live { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
-  header .live .dot { width: 8px; height: 8px; border-radius: 50%; background: #8b949e; transition: background 0.3s; }
-  header .live .dot.connected { background: var(--live); }
-  .layout { display: flex; flex: 1; overflow: hidden; }
-  nav { width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; padding: 8px 0; flex-shrink: 0; }
-  nav .group-label { padding: 8px 12px 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); }
-  nav .concept-link { display: block; padding: 5px 12px 5px 24px; color: var(--text); text-decoration: none; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; border-left: 2px solid transparent; }
-  nav .concept-link:hover { background: var(--active-bg); color: var(--active-text); }
-  nav .concept-link.active { background: var(--active-bg); color: var(--active-text); border-left-color: var(--link); font-weight: 500; }
-  nav .root-link { padding-left: 12px; }
-  main { flex: 1; overflow-y: auto; padding: 32px 40px; max-width: 900px; }
-  main .empty { color: var(--text2); font-style: italic; margin-top: 48px; text-align: center; }
-  .md-body { line-height: 1.6; }
-  .md-body h1, .md-body h2, .md-body h3, .md-body h4 { margin: 1.5em 0 0.5em; font-weight: 600; line-height: 1.3; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
-  .md-body h1 { font-size: 1.8em; }
-  .md-body h2 { font-size: 1.4em; }
-  .md-body h3 { font-size: 1.2em; border-bottom: none; }
-  .md-body h4 { font-size: 1em; border-bottom: none; }
-  .md-body p { margin: 0.8em 0; }
-  .md-body ul, .md-body ol { margin: 0.8em 0; padding-left: 2em; }
-  .md-body li { margin: 0.3em 0; }
-  .md-body code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.875em; background: var(--bg2); padding: 0.15em 0.4em; border-radius: 4px; border: 1px solid var(--border); }
-  .md-body pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 16px; overflow-x: auto; margin: 1em 0; }
-  .md-body pre code { background: none; border: none; padding: 0; font-size: 0.875em; }
-  .md-body table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-  .md-body th, .md-body td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
-  .md-body th { background: var(--bg2); font-weight: 600; }
-  .md-body blockquote { border-left: 4px solid var(--border); padding: 0 1em; color: var(--text2); margin: 1em 0; }
-  .md-body a { color: var(--link); text-decoration: none; }
-  .md-body a:hover { color: var(--link-hover); text-decoration: underline; }
-  .md-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
-  .frontmatter { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin-bottom: 24px; font-family: monospace; font-size: 12px; color: var(--text2); }
-  .frontmatter .fm-row { display: flex; gap: 8px; margin: 2px 0; }
-  .frontmatter .fm-key { color: var(--text); font-weight: 600; min-width: 80px; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f172a; --bg2: #1e293b; --bg3: #334155;
+  --border: #334155; --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+  --link: #38bdf8; --accent: #f59e0b;
+  --header-h: 48px; --map-w: 48%;
+  --radius-sm: 6px; --radius-md: 10px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+html, body { height: 100%; overflow: hidden; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px;
+       color: var(--text); background: var(--bg); display: flex; flex-direction: column; }
+/* ── Header ── */
+header { height: var(--header-h); flex-shrink: 0; display: flex; align-items: center;
+         padding: 0 20px; gap: 10px; background: var(--bg2);
+         border-bottom: 1px solid var(--border); user-select: none; }
+header .logo { font-family: monospace; font-size: 15px; font-weight: 700; color: #e2e8f0; letter-spacing: -0.3px; }
+header .sep  { color: var(--text3); }
+header .path { font-family: monospace; font-size: 12px; color: var(--text3); flex: 1; overflow: hidden;
+               text-overflow: ellipsis; white-space: nowrap; }
+header .live { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); }
+header .dot  { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); transition: background .3s; }
+header .dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+/* ── Layout ── */
+.layout { display: flex; flex: 1; overflow: hidden; }
+/* ── Map panel ── */
+.map-panel { width: var(--map-w); position: relative; overflow: hidden; background: var(--bg); }
+#mindmap { width: 100%; height: 100%; display: block; }
+/* ── Divider ── */
+.divider { width: 1px; background: var(--border); flex-shrink: 0; }
+/* ── Content panel ── */
+.content-panel { flex: 1; overflow-y: auto; padding: 32px 36px; }
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center;
+           height: 100%; gap: 12px; color: var(--text3); }
+.welcome svg { opacity: .3; }
+.welcome p { font-size: 14px; }
+/* ── Frontmatter card ── */
+.fm-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-md);
+           padding: 14px 18px; margin-bottom: 24px; font-family: monospace; font-size: 12px; }
+.fm-row { display: flex; gap: 10px; margin: 3px 0; }
+.fm-key { color: var(--link); min-width: 88px; font-weight: 600; }
+.fm-val { color: var(--text2); }
+/* ── Markdown body ── */
+.md-body { line-height: 1.7; font-size: 14px; }
+.md-body h1,.md-body h2,.md-body h3,.md-body h4 { color: #f1f5f9; margin: 1.6em 0 .5em; font-weight: 600; line-height: 1.3; }
+.md-body h1 { font-size: 1.7em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+.md-body h2 { font-size: 1.35em; border-bottom: 1px solid var(--border); padding-bottom: .3em; }
+.md-body h3 { font-size: 1.1em; }
+.md-body p { margin: .8em 0; }
+.md-body ul,.md-body ol { margin: .8em 0; padding-left: 1.8em; }
+.md-body li { margin: .3em 0; }
+.md-body code { font-family: 'SFMono-Regular', Consolas, monospace; font-size: .875em;
+                background: var(--bg3); padding: .15em .4em; border-radius: 4px; color: #fda4af; }
+.md-body pre { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-md);
+               padding: 16px; overflow-x: auto; margin: 1em 0; }
+.md-body pre code { background: none; color: inherit; padding: 0; }
+.md-body table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: .9em; }
+.md-body th,.md-body td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.md-body th { background: var(--bg2); color: #f1f5f9; font-weight: 600; }
+.md-body blockquote { border-left: 3px solid var(--link); padding: 0 1em; color: var(--text2); margin: 1em 0; }
+.md-body a { color: var(--link); text-decoration: none; }
+.md-body a:hover { text-decoration: underline; }
+.md-body hr { border: none; border-top: 1px solid var(--border); margin: 1.5em 0; }
+/* ── Tooltip ── */
+#tooltip { position: fixed; pointer-events: none; display: none; z-index: 999;
+           background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+           padding: 8px 12px; max-width: 280px; box-shadow: var(--shadow); }
+#tooltip .tt-name { font-weight: 600; color: #f1f5f9; font-size: 13px; margin-bottom: 2px; }
+#tooltip .tt-id   { font-family: monospace; font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+#tooltip .tt-desc { font-size: 12px; color: var(--text2); line-height: 1.4; }
+/* ── SVG mind-map styles ── */
+.node-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+              pointer-events: none; }
+.link-path { fill: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>js-okf viewer</h1>
+  <span class="logo">js-okf</span>
   <span class="sep">·</span>
-  <span class="bundle-path" id="bundle-path"></span>
-  <span class="live"><span class="dot" id="live-dot"></span><span id="live-label">connecting…</span></span>
+  <span class="path" id="hdr-path">loading…</span>
+  <span class="live"><span class="dot" id="live-dot"></span><span id="live-lbl">connecting…</span></span>
 </header>
 <div class="layout">
-  <nav id="sidebar"></nav>
-  <main id="content"><p class="empty">Select a concept from the sidebar.</p></main>
+  <div class="map-panel" id="map-panel">
+    <svg id="mindmap"></svg>
+  </div>
+  <div class="divider"></div>
+  <div class="content-panel" id="content">
+    <div class="welcome">
+      <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/>
+        <circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/>
+        <line x1="6" y1="6" x2="10" y2="11"/><line x1="18" y1="6" x2="14" y2="11"/>
+        <line x1="6" y1="18" x2="10" y2="13"/><line x1="18" y1="18" x2="14" y2="13"/>
+      </svg>
+      <p>Click any node in the mind map to open it.</p>
+    </div>
+  </div>
 </div>
-<script>
-const BUNDLE = document.getElementById('bundle-path');
-const SIDEBAR = document.getElementById('sidebar');
-const CONTENT = document.getElementById('content');
-const DOT = document.getElementById('live-dot');
-const LABEL = document.getElementById('live-label');
+<div id="tooltip"></div>
 
+<script>
+'use strict';
 marked.setOptions({ breaks: false });
-marked.use({ renderer: { code({ text, lang }) {
-  const hl = lang && hljs.getLanguage(lang) ? hljs.highlight(text, { language: lang }).value : hljs.highlightAuto(text).value;
-  return '<pre><code class="hljs ' + (lang || '') + '">' + hl + '</code></pre>';
+marked.use({ renderer: { code: function(t) {
+  var lang = t.lang || '';
+  var text = t.text || '';
+  var hl = lang && hljs.getLanguage(lang) ? hljs.highlight(text, { language: lang }).value : hljs.highlightAuto(text).value;
+  return '<pre><code class="hljs ' + lang + '">' + hl + '</code></pre>';
 }}});
 
-let currentId = null;
+var currentId = null;
+var allConcepts = [];
+var bundleRootPath = '';
+var svgEl, gMain, zoomBeh;
 
-async function loadConcepts() {
-  const res = await fetch('/api/concepts');
-  const concepts = await res.json();
-  BUNDLE.textContent = concepts._bundleRoot || '';
-  renderSidebar(concepts.items || []);
+// ── Colour palette ──────────────────────────────────────────
+var PALETTE = ['#38bdf8','#a78bfa','#34d399','#fb923c','#f472b6','#facc15','#60a5fa','#4ade80','#f87171','#c084fc'];
+var groupColorMap = {};
+var colorIdx = 0;
+
+function groupColor(name) {
+  if (!groupColorMap[name]) { groupColorMap[name] = PALETTE[colorIdx++ % PALETTE.length]; }
+  return groupColorMap[name];
 }
 
-function renderSidebar(items) {
-  const groups = {};
-  for (const c of items) {
-    const parts = c.id.split('/');
-    const group = parts.length > 1 ? parts[0] : '';
-    if (!groups[group]) groups[group] = [];
-    groups[group].push(c);
-  }
-  let html = '';
-  const sorted = Object.keys(groups).sort((a, b) => a.localeCompare(b));
-  for (const g of sorted) {
-    if (g) html += '<div class="group-label">' + escHtml(g) + '</div>';
-    for (const c of groups[g]) {
-      const label = c.matter && c.matter.title ? c.matter.title : (c.id.split('/').pop() || c.id);
-      const active = c.id === currentId ? ' active' : '';
-      html += '<a class="concept-link' + (g ? '' : ' root-link') + active + '" data-id="' + escAttr(c.id) + '" title="' + escAttr(c.id) + '">' + escHtml(label) + '</a>';
+// ── Tree builder ────────────────────────────────────────────
+function buildTree(concepts, rootLabel) {
+  var root = { name: rootLabel, id: '_root', children: [], depth: 0 };
+  var groups = {};
+  groupColorMap = {};
+  colorIdx = 0;
+
+  for (var i = 0; i < concepts.length; i++) {
+    var c = concepts[i];
+    var parts = c.id.split('/');
+    var label = (c.matter && c.matter.title) ? c.matter.title : parts[parts.length - 1];
+    if (parts.length === 1) {
+      root.children.push({ name: label, id: c.id, concept: c, isLeaf: true });
+    } else {
+      var grp = parts[0];
+      if (!groups[grp]) {
+        groups[grp] = { name: grp, id: '_g_' + grp, children: [], isGroup: true };
+        root.children.push(groups[grp]);
+      }
+      groups[grp].children.push({ name: label, id: c.id, concept: c, isLeaf: true });
     }
   }
-  SIDEBAR.innerHTML = html;
-  SIDEBAR.querySelectorAll('[data-id]').forEach(el => {
-    el.addEventListener('click', () => loadConcept(el.getAttribute('data-id')));
+  return root;
+}
+
+// ── Mind-map renderer ───────────────────────────────────────
+function initSVG() {
+  svgEl = d3.select('#mindmap');
+  zoomBeh = d3.zoom().scaleExtent([0.15, 5])
+    .on('zoom', function(ev) { gMain.attr('transform', ev.transform); });
+  svgEl.call(zoomBeh).on('dblclick.zoom', null);
+}
+
+function renderMap(treeData) {
+  var panel = document.getElementById('map-panel');
+  var W = panel.clientWidth, H = panel.clientHeight;
+  svgEl.attr('width', W).attr('height', H).selectAll('*').remove();
+
+  // ── Defs: glow filter + radial gradient for root ──
+  var defs = svgEl.append('defs');
+  var glow = defs.append('filter').attr('id', 'glow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+  glow.append('feGaussianBlur').attr('stdDeviation', '3.5').attr('result', 'blur');
+  var feMerge = glow.append('feMerge');
+  feMerge.append('feMergeNode').attr('in', 'blur');
+  feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  var rootGrad = defs.append('radialGradient').attr('id', 'rootGrad');
+  rootGrad.append('stop').attr('offset', '0%').attr('stop-color', '#7dd3fc');
+  rootGrad.append('stop').attr('offset', '100%').attr('stop-color', '#0ea5e9');
+
+  gMain = svgEl.append('g');
+
+  var hier = d3.hierarchy(treeData);
+  var leaves = hier.leaves().length || 1;
+  // Adaptive radius: more leaves → larger radius
+  var baseR = Math.min(W, H) * 0.34;
+  var outerR = Math.max(baseR, leaves * 14);
+  outerR = Math.min(outerR, Math.min(W, H) * 0.46);
+
+  var layout = d3.tree()
+    .size([2 * Math.PI, outerR])
+    .separation(function(a, b) { return (a.parent === b.parent ? 1 : 2) / a.depth; });
+
+  layout(hier);
+
+  // Assign group colours now (pre-pass)
+  hier.children && hier.children.forEach(function(child) {
+    if (child.data.isGroup) groupColor(child.data.name);
+    else if (child.data.isLeaf) groupColor('__root__');
+  });
+
+  function nodeColor(d) {
+    if (d.depth === 0) return 'url(#rootGrad)';
+    if (d.depth === 1) return d.data.isGroup ? groupColor(d.data.name) : groupColor('__root__');
+    return d.parent ? groupColor(d.parent.data.name) : '#94a3b8';
+  }
+  function linkColor(d) {
+    var t = d.target;
+    if (t.depth === 1) return t.data.isGroup ? groupColor(t.data.name) : groupColor('__root__');
+    return t.parent ? groupColor(t.parent.data.name) : '#94a3b8';
+  }
+
+  // ── Links ──
+  gMain.append('g').attr('class', 'links')
+    .selectAll('path').data(hier.links()).join('path')
+    .attr('class', 'link-path')
+    .attr('stroke', function(d) { return linkColor(d); })
+    .attr('stroke-opacity', 0.25)
+    .attr('stroke-width', function(d) { return d.target.depth === 1 ? 2 : 1.2; })
+    .attr('d', d3.linkRadial().angle(function(d) { return d.x; }).radius(function(d) { return d.y; }));
+
+  // ── Nodes ──
+  var nodes = gMain.append('g').attr('class', 'nodes')
+    .selectAll('g').data(hier.descendants()).join('g')
+    .attr('class', 'node-g')
+    .attr('transform', function(d) {
+      return 'rotate(' + (d.x * 180 / Math.PI - 90) + ') translate(' + d.y + ',0)';
+    });
+
+  // Selection ring (hidden initially)
+  nodes.append('circle').attr('class', 'sel-ring')
+    .attr('r', function(d) { return (d.depth === 0 ? 20 : d.depth === 1 ? 13 : 8) + 4; })
+    .attr('fill', 'none')
+    .attr('stroke', '#fbbf24').attr('stroke-width', 2.5).attr('stroke-dasharray', '4 3')
+    .style('opacity', 0);
+
+  // Main circles
+  nodes.append('circle').attr('class', 'node-c')
+    .attr('r', function(d) { return d.depth === 0 ? 20 : d.depth === 1 ? 12 : 7; })
+    .attr('fill', nodeColor)
+    .attr('stroke', function(d) { return d.depth === 0 ? '#7dd3fc' : 'rgba(255,255,255,0.15)'; })
+    .attr('stroke-width', function(d) { return d.depth === 0 ? 2 : 1; })
+    .attr('filter', function(d) { return d.depth <= 1 ? 'url(#glow)' : null; })
+    .style('cursor', function(d) { return d.data.isLeaf ? 'pointer' : 'default'; })
+    .on('mouseover', function(ev, d) {
+      if (!d.data.isLeaf) return;
+      d3.select(this).attr('r', d.depth === 1 ? 14 : 9);
+      var name = d.data.name;
+      var id = d.data.id;
+      var desc = d.data.concept && d.data.concept.matter && d.data.concept.matter.description ? d.data.concept.matter.description : '';
+      var h = '<div class="tt-name">' + esc(name) + '</div><div class="tt-id">' + esc(id) + '</div>';
+      if (desc) h += '<div class="tt-desc">' + esc(desc) + '</div>';
+      var tip = document.getElementById('tooltip');
+      tip.innerHTML = h; tip.style.display = 'block';
+      tip.style.left = (ev.clientX + 14) + 'px'; tip.style.top = (ev.clientY - 8) + 'px';
+    })
+    .on('mousemove', function(ev) {
+      var tip = document.getElementById('tooltip');
+      tip.style.left = (ev.clientX + 14) + 'px'; tip.style.top = (ev.clientY - 8) + 'px';
+    })
+    .on('mouseout', function(ev, d) {
+      d3.select(this).attr('r', d.depth === 0 ? 20 : d.depth === 1 ? 12 : 7);
+      document.getElementById('tooltip').style.display = 'none';
+    })
+    .on('click', function(ev, d) {
+      if (d.data.isLeaf && d.data.id) loadConcept(d.data.id);
+    });
+
+  // Labels
+  nodes.append('text').attr('class', 'node-label')
+    .attr('dy', '0.32em')
+    .attr('x', function(d) {
+      if (d.depth === 0) return 0;
+      return (d.x < Math.PI) === !d.children ? 17 : -17;
+    })
+    .attr('y', function(d) { return d.depth === 0 ? 36 : 0; })
+    .attr('text-anchor', function(d) {
+      if (d.depth === 0) return 'middle';
+      return (d.x < Math.PI) === !d.children ? 'start' : 'end';
+    })
+    .attr('transform', function(d) { return (d.depth > 0 && d.x >= Math.PI) ? 'rotate(180)' : null; })
+    .attr('font-size', function(d) { return d.depth === 0 ? 13 : d.depth === 1 ? 11.5 : 10.5; })
+    .attr('font-weight', function(d) { return d.depth <= 1 ? '600' : '400'; })
+    .attr('fill', function(d) {
+      if (d.depth === 0) return '#e2e8f0';
+      return d.depth === 1 ? nodeColor(d) : '#cbd5e1';
+    })
+    .text(function(d) { return d.data.name; });
+
+  // Entrance animation
+  nodes.style('opacity', 0)
+    .transition().duration(600)
+    .delay(function(d, i) { return i * 18; })
+    .style('opacity', 1);
+
+  // Center the view
+  svgEl.call(zoomBeh.transform, d3.zoomIdentity.translate(W / 2, H / 2));
+}
+
+function updateSelection(id) {
+  d3.selectAll('.sel-ring').style('opacity', 0);
+  d3.selectAll('.node-g').each(function(d) {
+    if (d.data && d.data.id === id) {
+      d3.select(this).select('.sel-ring')
+        .transition().duration(200).style('opacity', 1);
+    }
   });
 }
 
+// ── Concept content ─────────────────────────────────────────
 async function loadConcept(id) {
   currentId = id;
-  window.location.hash = '#' + id;
-  SIDEBAR.querySelectorAll('[data-id]').forEach(el => {
-    el.classList.toggle('active', el.getAttribute('data-id') === id);
-  });
-  const res = await fetch('/api/concept?id=' + encodeURIComponent(id));
-  if (!res.ok) { CONTENT.innerHTML = '<p class="empty">Concept not found: ' + escHtml(id) + '</p>'; return; }
-  const concept = await res.json();
-  let html = '<div class="frontmatter">';
-  for (const [k, v] of Object.entries(concept.matter)) {
-    if (v === undefined || v === null) continue;
-    html += '<div class="fm-row"><span class="fm-key">' + escHtml(k) + ':</span><span>' + escHtml(Array.isArray(v) ? v.join(', ') : String(v)) + '</span></div>';
+  window.location.hash = '#' + encodeURIComponent(id);
+  updateSelection(id);
+  var res = await fetch('/api/concept?id=' + encodeURIComponent(id));
+  if (!res.ok) {
+    document.getElementById('content').innerHTML = '<div class="welcome"><p>Not found: ' + esc(id) + '</p></div>';
+    return;
   }
+  var c = await res.json();
+  var html = '<div class="fm-card">';
+  var matter = c.matter || {};
+  Object.keys(matter).forEach(function(k) {
+    var v = matter[k];
+    if (v === undefined || v === null) return;
+    var valStr = Array.isArray(v) ? v.join(', ') : String(v);
+    html += '<div class="fm-row"><span class="fm-key">' + esc(k) + '</span><span class="fm-val">' + esc(valStr) + '</span></div>';
+  });
   html += '</div>';
-  html += '<div class="md-body">' + marked.parse(concept.body || '') + '</div>';
-  CONTENT.innerHTML = html;
-  CONTENT.scrollTop = 0;
+  html += '<div class="md-body">' + marked.parse(c.body || '') + '</div>';
+  var panel = document.getElementById('content');
+  panel.innerHTML = html;
+  panel.scrollTop = 0;
 }
 
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function escAttr(s) { return String(s).replace(/"/g,'&quot;'); }
-
-const es = new EventSource('/api/events');
-es.onopen = () => { DOT.classList.add('connected'); LABEL.textContent = 'Live'; };
-es.onerror = () => { DOT.classList.remove('connected'); LABEL.textContent = 'Disconnected'; };
-es.addEventListener('change', async (e) => {
-  const data = JSON.parse(e.data);
-  await loadConcepts();
-  if (data.id === currentId) await loadConcept(currentId);
-});
-
-async function init() {
-  await loadConcepts();
-  const hash = window.location.hash.slice(1);
-  if (hash) await loadConcept(decodeURIComponent(hash));
+// ── Data loading ─────────────────────────────────────────────
+async function loadAll() {
+  var res = await fetch('/api/concepts');
+  var data = await res.json();
+  bundleRootPath = data._bundleRoot || '';
+  allConcepts = data.items || [];
+  document.getElementById('hdr-path').textContent = bundleRootPath;
+  var label = bundleRootPath.split('/').pop() || bundleRootPath || 'bundle';
+  renderMap(buildTree(allConcepts, label));
 }
 
-window.addEventListener('hashchange', () => {
-  const hash = window.location.hash.slice(1);
-  if (hash && hash !== currentId) loadConcept(decodeURIComponent(hash));
+// ── SSE live reload ──────────────────────────────────────────
+var es = new EventSource('/api/events');
+es.onopen = function() {
+  document.getElementById('live-dot').classList.add('on');
+  document.getElementById('live-lbl').textContent = 'Live';
+};
+es.onerror = function() {
+  document.getElementById('live-dot').classList.remove('on');
+  document.getElementById('live-lbl').textContent = 'Reconnecting…';
+};
+es.addEventListener('change', function(ev) {
+  var d = JSON.parse(ev.data);
+  loadAll().then(function() {
+    if (d.id === currentId) loadConcept(currentId);
+  });
 });
 
-init();
+// ── Hash routing ─────────────────────────────────────────────
+window.addEventListener('hashchange', function() {
+  var h = decodeURIComponent(window.location.hash.slice(1));
+  if (h && h !== currentId) loadConcept(h);
+});
+
+// ── Init ────────────────────────────────────────────────────
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+initSVG();
+loadAll().then(function() {
+  var h = decodeURIComponent(window.location.hash.slice(1));
+  if (h) loadConcept(h);
+});
+
+// Redraw on resize
+var resizeTimer;
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(function() {
+    var label = bundleRootPath.split('/').pop() || 'bundle';
+    renderMap(buildTree(allConcepts, label));
+    if (currentId) updateSelection(currentId);
+  }, 200);
+});
 </script>
 </body>
 </html>`
@@ -274,6 +501,13 @@ export function createServer(
       return
     }
 
+    if (pathname === '/vendor/d3.js') {
+      const content = await readVendor(D3_PATH)
+      res.writeHead(200, { 'Content-Type': 'application/javascript' })
+      res.end(content)
+      return
+    }
+
     if (pathname === '/vendor/marked.js') {
       const content = await readVendor(MARKED_PATH)
       res.writeHead(200, { 'Content-Type': 'application/javascript' })
@@ -328,7 +562,7 @@ export function createServer(
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
       })
-      res.write(':\n\n') // initial comment to flush
+      res.write(':\n\n')
       sseClients.add(res)
       req.on('close', () => sseClients.delete(res))
       return

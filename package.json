@@ -1,0 +1,71 @@
+{
+  "name": "js-okf",
+  "version": "0.1.0",
+  "description": "TypeScript library for creating and updating Open Knowledge Format (OKF) bundles — markdown-based knowledge files for AI coding agents",
+  "keywords": [
+    "okf",
+    "open-knowledge-format",
+    "llm",
+    "ai-agent",
+    "coding-agent",
+    "knowledge-base",
+    "markdown",
+    "yaml",
+    "frontmatter",
+    "context",
+    "memory",
+    "typescript"
+  ],
+  "author": "Prabhay Gupta",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prabhay759/js-okf.git"
+  },
+  "homepage": "https://github.com/prabhay759/js-okf#readme",
+  "bugs": {
+    "url": "https://github.com/prabhay759/js-okf/issues"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run typecheck && npm run test"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

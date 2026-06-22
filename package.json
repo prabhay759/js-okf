@@ -1,8 +1,31 @@
 {
   "name": "js-okf",
   "version": "0.1.0",
-  "description": "Create and update OKF (Open Knowledge Format) bundles for AI coding agents",
+  "description": "TypeScript library for creating and updating Open Knowledge Format (OKF) bundles — markdown-based knowledge files for AI coding agents",
+  "keywords": [
+    "okf",
+    "open-knowledge-format",
+    "llm",
+    "ai-agent",
+    "coding-agent",
+    "knowledge-base",
+    "markdown",
+    "yaml",
+    "frontmatter",
+    "context",
+    "memory",
+    "typescript"
+  ],
+  "author": "Prabhay Gupta",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prabhay759/js-okf.git"
+  },
+  "homepage": "https://github.com/prabhay759/js-okf#readme",
+  "bugs": {
+    "url": "https://github.com/prabhay759/js-okf/issues"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

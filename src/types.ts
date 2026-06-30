@@ -12,6 +12,8 @@ export interface OKFConcept {
   id: string
   matter: OKFMatter
   body: string
+  /** Absolute path to the underlying .md file */
+  path?: string
 }
 
 export interface UpsertConceptInput {

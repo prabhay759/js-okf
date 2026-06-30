@@ -21,7 +21,7 @@ describe('updateIndex', () => {
     await upsertConcept(dir, { id: 'doc', matter: { type: 'doc' } })
     await updateIndex(dir, ['doc'])
 
-    const concept = await readConcept(path.join(dir, 'index.md'), 'index')
+    const concept = await readConcept(dir, 'index')
     expect(concept).not.toBeNull()
     expect(concept!.matter.type).toBe('index')
   })
@@ -30,7 +30,7 @@ describe('updateIndex', () => {
     await upsertConcept(dir, { id: 'my-doc', matter: { type: 'doc', title: 'My Document' } })
     await updateIndex(dir, ['my-doc'])
 
-    const concept = await readConcept(path.join(dir, 'index.md'), 'index')
+    const concept = await readConcept(dir, 'index')
     expect(concept!.body).toContain('[My Document]')
     expect(concept!.body).toContain('./my-doc.md')
   })
@@ -39,7 +39,7 @@ describe('updateIndex', () => {
     await upsertConcept(dir, { id: 'no-title', matter: { type: 'doc' } })
     await updateIndex(dir, ['no-title'])
 
-    const concept = await readConcept(path.join(dir, 'index.md'), 'index')
+    const concept = await readConcept(dir, 'index')
     expect(concept!.body).toContain('[no-title]')
     expect(concept!.body).toContain('./no-title.md')
   })
@@ -49,23 +49,23 @@ describe('updateIndex', () => {
     await upsertConcept(dir, { id: 'tables/posts', matter: { type: 'table' } })
     await updateIndex(dir, ['tables/users', 'tables/posts'])
 
-    const concept = await readConcept(path.join(dir, 'index.md'), 'index')
+    const concept = await readConcept(dir, 'index')
     expect(concept!.body).toContain('## tables')
   })
 
   it('handles empty bundle with no concepts', async () => {
     await updateIndex(dir, [])
     expect(existsSync(path.join(dir, 'index.md'))).toBe(true)
-    const concept = await readConcept(path.join(dir, 'index.md'), 'index')
+    const concept = await readConcept(dir, 'index')
     expect(concept!.matter.type).toBe('index')
   })
 
   it('overwrites stale index.md with updated timestamp', async () => {
     await updateIndex(dir, [])
-    const ts1 = (await readConcept(path.join(dir, 'index.md'), 'index'))!.matter.timestamp
+    const ts1 = (await readConcept(dir, 'index'))!.matter.timestamp
     await new Promise((r) => setTimeout(r, 5))
     await updateIndex(dir, [])
-    const ts2 = (await readConcept(path.join(dir, 'index.md'), 'index'))!.matter.timestamp
+    const ts2 = (await readConcept(dir, 'index'))!.matter.timestamp
     expect(ts2! > ts1!).toBe(true)
   })
 })
@@ -78,7 +78,7 @@ describe('appendLog', () => {
 
   it('log.md has frontmatter with type: log', async () => {
     await appendLog(dir, { message: 'test' })
-    const concept = await readConcept(path.join(dir, 'log.md'), 'log')
+    const concept = await readConcept(dir, 'log')
     expect(concept!.matter.type).toBe('log')
   })
 
@@ -119,9 +119,9 @@ describe('appendLog', () => {
 
   it('subsequent calls do not modify existing frontmatter', async () => {
     await appendLog(dir, { message: 'entry one' })
-    const before = await readConcept(path.join(dir, 'log.md'), 'log')
+    const before = await readConcept(dir, 'log')
     await appendLog(dir, { message: 'entry two' })
-    const after = await readConcept(path.join(dir, 'log.md'), 'log')
+    const after = await readConcept(dir, 'log')
     expect(after!.matter.type).toBe(before!.matter.type)
   })
 })

@@ -473,7 +473,7 @@ export function createServer(
           const rel = path.relative(absRoot, full)
           const id = normalizeId(rel)
           try {
-            const concept = await readConcept(full, id)
+            const concept = await readConcept(absRoot, id)
             if (concept) results.push({ id: concept.id, matter: concept.matter as Record<string, unknown> })
           } catch {
             // skip unparseable files
@@ -539,10 +539,9 @@ export function createServer(
     if (pathname === '/api/concept') {
       const rawId = reqUrl.searchParams.get('id') ?? ''
       const id = normalizeId(rawId)
-      const filePath = path.join(absRoot, id + '.md')
       let concept: OKFConcept | null = null
       try {
-        concept = await readConcept(filePath, id)
+        concept = await readConcept(absRoot, id)
       } catch {
         // fall through to 404
       }

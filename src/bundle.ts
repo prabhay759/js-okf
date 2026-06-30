@@ -2,8 +2,8 @@ import { readdir } from 'node:fs/promises'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import type { BundleOptions, ListOptions, LogEntry, OKFConcept, UpsertConceptInput, UpsertResult } from './types.js'
-import { normalizeId } from './utils.js'
 import { readConcept, upsertConcept } from './concept.js'
+import { OKFError } from './errors.js'
 import { updateIndex, appendLog } from './special.js'
 
 const SPECIAL_IDS = new Set(['index', 'log'])
@@ -27,9 +27,19 @@ export class OKFBundle {
   }
 
   async read(id: string): Promise<OKFConcept | null> {
-    const normalId = normalizeId(id)
-    const filePath = path.join(this.root, normalId + '.md')
-    return readConcept(filePath, normalId)
+    return readConcept(this.root, id)
+  }
+
+  async readOrThrow(id: string): Promise<OKFConcept> {
+    const concept = await readConcept(this.root, id)
+    if (concept === null) throw new OKFError(`Concept not found: ${id}`)
+    return concept
+  }
+
+  async listConcepts(options?: ListOptions): Promise<OKFConcept[]> {
+    const ids = await this.list(options)
+    const results = await Promise.all(ids.map((id) => readConcept(this.root, id)))
+    return results.filter((c): c is OKFConcept => c !== null)
   }
 
   async list(options: ListOptions = {}): Promise<string[]> {

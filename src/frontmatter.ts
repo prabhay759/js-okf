@@ -20,6 +20,7 @@ export function parseConcept(id: string, raw: string, filePath: string): OKFConc
     id,
     matter: okfMatter,
     body: parsed.content.trim(),
+    path: filePath,
   }
 }
 

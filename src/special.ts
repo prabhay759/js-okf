@@ -9,8 +9,7 @@ export async function updateIndex(bundleRoot: string, conceptIds: string[]): Pro
   const groups: Record<string, Array<{ id: string; title?: string }>> = {}
 
   for (const id of conceptIds) {
-    const filePath = path.join(bundleRoot, id + '.md')
-    const concept = await readConcept(filePath, id)
+    const concept = await readConcept(bundleRoot, id)
     const title = concept?.matter.title
 
     const topLevel = id.includes('/') ? (id.split('/')[0] ?? id) : ''

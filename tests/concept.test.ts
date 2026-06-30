@@ -15,20 +15,20 @@ afterEach(() => {
 })
 
 describe('readConcept', () => {
-  it('returns null for non-existent file', async () => {
-    const result = await readConcept(path.join(dir, 'missing.md'), 'missing')
+  it('returns null for non-existent concept', async () => {
+    const result = await readConcept(dir, 'missing')
     expect(result).toBeNull()
   })
 
   it('returns parsed concept for existing file', async () => {
-    const filePath = path.join(dir, 'hello.md')
-    writeRaw(filePath, `---\ntype: doc\ntitle: Hello\n---\n\nBody text.\n`)
-    const result = await readConcept(filePath, 'hello')
+    writeRaw(path.join(dir, 'hello.md'), `---\ntype: doc\ntitle: Hello\n---\n\nBody text.\n`)
+    const result = await readConcept(dir, 'hello')
     expect(result).not.toBeNull()
     expect(result!.id).toBe('hello')
     expect(result!.matter.type).toBe('doc')
     expect(result!.matter.title).toBe('Hello')
     expect(result!.body).toBe('Body text.')
+    expect(result!.path).toBe(path.join(dir, 'hello.md'))
   })
 })
 

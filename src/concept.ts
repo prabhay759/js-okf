@@ -4,7 +4,7 @@ import type { OKFConcept, UpsertConceptInput, UpsertResult } from './types.js'
 import { normalizeId, idToFilePath, nowISO, ensureDir } from './utils.js'
 import { parseConcept, mergeMatter, serializeConcept } from './frontmatter.js'
 
-export async function readConcept(filePath: string, id: string): Promise<OKFConcept | null> {
+async function readConceptFile(filePath: string, id: string): Promise<OKFConcept | null> {
   try {
     const raw = await readFile(filePath, 'utf8')
     return parseConcept(id, raw, filePath)
@@ -14,6 +14,12 @@ export async function readConcept(filePath: string, id: string): Promise<OKFConc
     }
     throw err
   }
+}
+
+export async function readConcept(bundleRoot: string, id: string): Promise<OKFConcept | null> {
+  const normalId = normalizeId(id)
+  const filePath = idToFilePath(bundleRoot, normalId)
+  return readConceptFile(filePath, normalId)
 }
 
 export async function writeConcept(filePath: string, okfMatter: import('./types.js').OKFMatter, body: string): Promise<void> {
@@ -28,7 +34,7 @@ export async function upsertConcept(
   const id = normalizeId(input.id)
   const filePath = idToFilePath(bundleRoot, id)
 
-  const existing = await readConcept(filePath, id)
+  const existing = await readConceptFile(filePath, id)
 
   let finalMatter: import('./types.js').OKFMatter
   let finalBody: string
@@ -54,7 +60,7 @@ export async function upsertConcept(
 
   await writeConcept(filePath, finalMatter, finalBody)
 
-  const concept: OKFConcept = { id, matter: finalMatter, body: finalBody }
+  const concept: OKFConcept = { id, matter: finalMatter, body: finalBody, path: filePath }
 
   return { id, filePath, created, concept }
 }

@@ -35,6 +35,13 @@ const HLJS_PATH = resolveVendor('hljs.js', { pkg: 'highlight.js', file: 'lib/cor
 const HLJS_CSS_PATH = resolveVendor('hljs.css', { pkg: 'highlight.js', file: 'styles/github.min.css' })
 const D3_PATH = resolveVendor('d3.js', { pkg: 'd3', file: 'dist/d3.min.js' })
 
+const VENDOR_ROUTES: Record<string, { path: string; type: string }> = {
+  '/vendor/d3.js': { path: D3_PATH, type: 'application/javascript' },
+  '/vendor/marked.js': { path: MARKED_PATH, type: 'application/javascript' },
+  '/vendor/hljs.js': { path: HLJS_PATH, type: 'application/javascript' },
+  '/vendor/hljs.css': { path: HLJS_CSS_PATH, type: 'text/css' },
+}
+
 const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -368,7 +375,7 @@ async function loadConcept(id) {
   Object.keys(matter).forEach(function(k) {
     var v = matter[k];
     if (v === undefined || v === null) return;
-    var valStr = Array.isArray(v) ? v.join(', ') : String(v);
+    var valStr = Array.isArray(v) ? v.join(', ') : (typeof v === 'object' ? JSON.stringify(v) : String(v));
     html += '<div class="fm-row"><span class="fm-key">' + esc(k) + '</span><span class="fm-val">' + esc(valStr) + '</span></div>';
   });
   html += '</div>';
@@ -448,10 +455,23 @@ export function createServer(
 
   const sseClients: Set<http.ServerResponse> = new Set()
 
+  // Resolve `id` to a `.md` path while guaranteeing it stays inside the bundle
+  // root. Returns null for anything that would escape via `../` or absolute paths.
+  function resolveWithinRoot(id: string): string | null {
+    const filePath = path.join(absRoot, id + '.md')
+    const rel = path.relative(absRoot, filePath)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return null
+    return filePath
+  }
+
   function broadcast(eventName: string, data: unknown): void {
     const payload = `event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`
     for (const client of sseClients) {
-      client.write(payload)
+      try {
+        client.write(payload)
+      } catch {
+        sseClients.delete(client)
+      }
     }
   }
 
@@ -501,30 +521,15 @@ export function createServer(
       return
     }
 
-    if (pathname === '/vendor/d3.js') {
-      const content = await readVendor(D3_PATH)
-      res.writeHead(200, { 'Content-Type': 'application/javascript' })
-      res.end(content)
-      return
-    }
-
-    if (pathname === '/vendor/marked.js') {
-      const content = await readVendor(MARKED_PATH)
-      res.writeHead(200, { 'Content-Type': 'application/javascript' })
-      res.end(content)
-      return
-    }
-
-    if (pathname === '/vendor/hljs.js') {
-      const content = await readVendor(HLJS_PATH)
-      res.writeHead(200, { 'Content-Type': 'application/javascript' })
-      res.end(content)
-      return
-    }
-
-    if (pathname === '/vendor/hljs.css') {
-      const content = await readVendor(HLJS_CSS_PATH)
-      res.writeHead(200, { 'Content-Type': 'text/css' })
+    const vendor = VENDOR_ROUTES[pathname]
+    if (vendor) {
+      const content = await readVendor(vendor.path)
+      if (!content) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+        res.end(`vendor asset unavailable: ${pathname} — run "npm run build:vendor"`)
+        return
+      }
+      res.writeHead(200, { 'Content-Type': vendor.type })
       res.end(content)
       return
     }
@@ -539,12 +544,14 @@ export function createServer(
     if (pathname === '/api/concept') {
       const rawId = reqUrl.searchParams.get('id') ?? ''
       const id = normalizeId(rawId)
-      const filePath = path.join(absRoot, id + '.md')
+      const filePath = resolveWithinRoot(id)
       let concept: OKFConcept | null = null
-      try {
-        concept = await readConcept(filePath, id)
-      } catch {
-        // fall through to 404
+      if (filePath) {
+        try {
+          concept = await readConcept(filePath, id)
+        } catch {
+          // fall through to 404
+        }
       }
       if (!concept) {
         res.writeHead(404, { 'Content-Type': 'application/json' })
@@ -593,7 +600,20 @@ export function createServer(
           console.log(`Watching: ${absRoot}`)
           console.log('Press Ctrl+C to stop.')
           if (openBrowser) {
-            import('node:child_process').then(({ exec }) => exec(`open "${url}" 2>/dev/null || xdg-open "${url}" 2>/dev/null || start "${url}"`))
+            // Pass the URL as an argv element (never interpolated into a shell
+            // string) so a crafted host/port can't inject a command.
+            import('node:child_process').then(({ spawn }) => {
+              const cmd = process.platform === 'darwin' ? 'open'
+                : process.platform === 'win32' ? 'start'
+                : 'xdg-open'
+              const child = spawn(cmd, [url], {
+                shell: process.platform === 'win32',
+                stdio: 'ignore',
+                detached: true,
+              })
+              child.on('error', () => { /* best-effort; ignore if no opener */ })
+              child.unref()
+            }).catch(() => { /* ignore */ })
           }
           resolve()
         })

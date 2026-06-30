@@ -1,6 +1,6 @@
 {
   "name": "js-okf",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "TypeScript library for creating and updating Open Knowledge Format (OKF) bundles — markdown-based knowledge files for AI coding agents",
   "keywords": [
     "okf",
@@ -67,7 +67,6 @@
     "marked": "^18.0.5"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.0.0",
     "d3": "^7.9.0",
